@@ -1,0 +1,36 @@
+{
+  "name": "gh-inspect",
+  "version": "1.0.0",
+  "description": "CLI tool to analyze GitHub repositories for health, README quality, and issue insights",
+  "main": "dist/index.js",
+  "bin": {
+    "gh-inspect": "./dist/cli.js"
+  },
+  "scripts": {
+    "build": "tsc",
+    "start": "node dist/cli.js",
+    "dev": "ts-node src/cli.ts",
+    "lint": "eslint src/**/*.ts",
+    "clean": "rm -rf dist"
+  },
+  "keywords": ["github", "cli", "oss", "analysis", "repo-health"],
+  "author": "",
+  "license": "MIT",
+  "dependencies": {
+    "axios": "^1.7.2",
+    "chalk": "^5.3.0",
+    "cheerio": "^1.0.0",
+    "commander": "^12.1.0",
+    "dotenv": "^16.4.5",
+    "openai": "^4.52.3",
+    "ora": "^8.0.1"
+  },
+  "devDependencies": {
+    "@types/cheerio": "^0.22.35",
+    "@types/node": "^20.14.10",
+    "typescript": "^5.5.3"
+  },
+  "engines": {
+    "node": ">=20.0.0"
+  }
+}
