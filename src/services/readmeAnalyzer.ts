@@ -51,9 +51,9 @@ export function analyzeReadme(content: string | null): ReadmeAnalysis {
   if (missingSections.includes("Installation"))  improvements.push('Add an "Installation" section with step-by-step instructions.');
   if (missingSections.includes("Usage"))         improvements.push('Add a "Usage" section with concrete examples.');
   if (missingSections.includes("Contributing"))  improvements.push('Add a "Contributing" section or link to CONTRIBUTING.md.');
-  if (!hasCodeExamples)                          improvements.push("Add code snippets — people want to see what using this looks like.");
+  if (!hasCodeExamples)                          improvements.push("Add code snippets - people want to see what using this looks like.");
   if (!hasBadges)                                improvements.push("Add CI/coverage badges to signal project health at a glance.");
-  if (wordCount < 200)                           improvements.push(`README is thin (${wordCount} words) — expand it.`);
+  if (wordCount < 200)                           improvements.push(`README is thin (${wordCount} words) - expand it.`);
 
   return { score, length: wordCount, sections, missingSections, improvements, hasCodeExamples, hasBadges, hasImages };
 }
@@ -63,7 +63,7 @@ function empty(): ReadmeAnalysis {
     score: 0, length: 0,
     sections: SECTIONS.map(s => ({ name: s.name, required: s.required, present: false })),
     missingSections: SECTIONS.filter(s => s.required).map(s => s.name),
-    improvements: ["No README found — this is the single most important thing to fix."],
+    improvements: ["No README found - this is the most important thing to fix."],
     hasCodeExamples: false, hasBadges: false, hasImages: false,
   };
 }
