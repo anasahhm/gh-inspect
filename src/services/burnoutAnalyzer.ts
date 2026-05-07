@@ -115,16 +115,16 @@ function buildVerdict(
   contributorCount: number
 ): string {
   if (abandonRisk) {
-    return `high abandon risk — sole maintainer (${topPercent}% of commits) has been gone ${daysSince}d.`;
+    return `high abandon risk - sole maintainer (${topPercent}% of commits) has been gone ${daysSince}d.`;
   }
   if (absent && topPercent >= 50) {
-    return `bus factor risk — dominant contributor absent for ${daysSince} days.`;
+    return `bus factor risk - dominant contributor absent for ${daysSince} days.`;
   }
   if (topPercent >= 70) {
-    return `1 person drives ${topPercent}% of this repo — bus factor is real but maintainer is active.`;
+    return `1 person drives ${topPercent}% of this repo - bus factor is real but maintainer is active.`;
   }
   if (contributorCount >= 5 && topPercent < 50) {
     return `healthy contributor spread across ${contributorCount}+ people.`;
   }
-  return `moderate concentration — top contributor owns ${topPercent}% of commits.`;
+  return `moderate concentration - top contributor owns ${topPercent}% of commits.`;
 }
