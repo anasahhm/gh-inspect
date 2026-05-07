@@ -169,13 +169,13 @@ function computeDeadScore(
 function buildSummary(verdict: DeadVerdict, days: number, name: string): string {
   switch (verdict) {
     case "dead":
-      return `${name} shows no signs of life — last activity ${Math.floor(days / 365)}y ago.`;
+      return `${name} shows no signs of life - last activity ${Math.floor(days / 365)}y ago.`;
     case "abandoned":
-      return `likely abandoned — last commit ${days}d ago, open PRs piling up.`;
+      return `likely abandoned - last commit ${days}d ago, open PRs piling up.`;
     case "stale":
-      return `going stale — ${days}d since last commit. may need a new maintainer.`;
+      return `going stale - ${days}d since last commit. may need a new maintainer.`;
     case "slowing":
-      return `activity is slowing — worth watching before depending on this.`;
+      return `activity is slowing - worth watching before depending on this.`;
     case "active":
       return `actively maintained.`;
   }
