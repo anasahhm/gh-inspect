@@ -71,10 +71,10 @@ OPENAI_API_KEY=gsk_xxxxxxxxxxxxxxxxxxxx
 ## Usage
 
 ```bash
-# Basic
+# Basic (Example)
 gh-inspect https://github.com/expressjs/express
 
-# Short form works too
+# Short form works too (Example)
 gh-inspect facebook/react
 
 # Skip AI (no API key needed)
