@@ -94,7 +94,7 @@ src/
 ├── cli.ts                      entry point, Commander setup
 ├── index.ts                    orchestrator, runs all steps
 ├── services/
-│   ├── githubService.ts        GitHub REST API — metadata, README, issues, commits, package.json
+│   ├── githubService.ts        GitHub REST API - metadata, README, issues, commits, package.json
 │   ├── readmeAnalyzer.ts       section detection, quality scoring
 │   ├── issueAnalyzer.ts        response time, ratios, label analysis
 │   ├── dependencyRotAnalyzer.ts  npm registry checks, version gap detection
