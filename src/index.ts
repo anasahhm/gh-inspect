@@ -20,7 +20,7 @@ export async function inspectRepo(url: string, config: AppConfig): Promise<Inspe
   let repoData;
   try {
     repoData = await new GitHubService(config.githubToken).fetchRepoData(owner, repo);
-    spin1.succeed(`fetched — ${repoData.issues.length} issues, ${repoData.commits.length} commits`);
+    spin1.succeed(`fetched - ${repoData.issues.length} issues, ${repoData.commits.length} commits`);
   } catch (e) {
     spin1.fail("fetch failed");
     throw e;
@@ -32,14 +32,14 @@ export async function inspectRepo(url: string, config: AppConfig): Promise<Inspe
   const [readmeAnalysis, issueInsights, dependencyRot, burnout] = await Promise.all([
     Promise.resolve(analyzeReadme(repoData.readme)),
     Promise.resolve(analyzeIssues(repoData.issues)),
-    analyzeDependencyRot(repoData.packageJson),   // async — hits npm registry
+    analyzeDependencyRot(repoData.packageJson),   // async - hits npm registry
     Promise.resolve(analyzeBurnout(repoData.commits)),
   ]);
 
   const deadRepo = analyzeDeadRepo(repoData.commits, repoData.issues, repoData.metadata);
 
   spin2.succeed(
-    `analyzed — readme ${readmeAnalysis.score}/10  ·  ` +
+    `analyzed - readme ${readmeAnalysis.score}/10  ·  ` +
     `deps ${dependencyRot.hasPackageJson ? dependencyRot.rotPercent + "% rot" : "no pkg.json"}  ·  ` +
     `vitality: ${deadRepo.verdict}`
   );
@@ -55,7 +55,7 @@ export async function inspectRepo(url: string, config: AppConfig): Promise<Inspe
       );
       spin3.succeed(`${aiSuggestions.length} AI suggestions`);
     } catch (e) {
-      spin3.warn("AI unavailable — continuing without it");
+      spin3.warn("AI unavailable - continuing without it");
       logger.debug(String(e));
     }
   }
