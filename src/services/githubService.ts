@@ -135,7 +135,7 @@ export class GitHubService {
     } catch { return 0; }
   }
 
-  // Fetch last 100 commits — enough for ownership/burnout stats
+  // Fetch last 100 commits - enough for ownership/burnout stats
   async commits(owner: string, repo: string): Promise<GitHubCommit[]> {
     try {
       const { data } = await this.http.get<GHCommit[]>(
@@ -176,10 +176,10 @@ export class GitHubService {
       if (s === 401) throw new Error("GitHub token invalid or missing.");
       if (s === 403) {
         if (e.response?.headers["x-ratelimit-remaining"] === "0")
-          throw new Error("GitHub rate limit hit — try again later.");
+          throw new Error("GitHub rate limit hit - try again later.");
         throw new Error(`Access forbidden (${ctx}).`);
       }
-      if (s === 404) throw new Error("Repo not found — check the URL.");
+      if (s === 404) throw new Error("Repo not found - check the URL.");
       throw new Error(`GitHub API ${s ?? "?"} on ${ctx}: ${e.message}`);
     }
     throw new Error(`Unexpected error (${ctx}): ${String(e)}`);
