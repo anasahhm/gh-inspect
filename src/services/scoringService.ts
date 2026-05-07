@@ -23,7 +23,7 @@ export function computeScore(
     burnout:       burnout.score,
   };
 
-  // Weights — new features carry real weight
+  // Weights - new features carry real weight
   const total =
     breakdown.readme        * 0.22 +
     breakdown.issueHealth   * 0.18 +
@@ -50,16 +50,16 @@ export function generateProblems(
 
   // README
   if (readme.score === 0)      p.push("No README found.");
-  else if (readme.score < 4)   p.push("README is too thin — barely documents the project.");
+  else if (readme.score < 4)   p.push("README is too thin - barely documents the project.");
   readme.missingSections.forEach(s => p.push(`README missing: ${s}.`));
 
   // Issues
   if (issues.openRatio > 0.7 && issues.totalOpen > 5)
-    p.push(`${(issues.openRatio * 100).toFixed(0)}% of issues are open — not being worked on.`);
+    p.push(`${(issues.openRatio * 100).toFixed(0)}% of issues are open - not being worked on.`);
   if (issues.averageResponseTimeHours !== null && issues.averageResponseTimeHours > 336)
     p.push(`Average issue response time is ${(issues.averageResponseTimeHours / 168).toFixed(1)} weeks.`);
   if (!issues.hasGoodFirstIssue && issues.totalOpen > 0)
-    p.push('No "good first issue" labels — new contributors have no entry point.');
+    p.push('No "good first issue" labels - new contributors have no entry point.');
 
   // Dependency rot
   if (depRot.hasPackageJson) {
@@ -77,10 +77,10 @@ export function generateProblems(
   if (dead.verdict === "dead" || dead.verdict === "abandoned")
     p.push(`Repo appears ${dead.verdict}: ${dead.summary}`);
   else if (dead.verdict === "stale")
-    p.push(`Repo is going stale — ${dead.daysSinceLastCommit} days since last commit.`);
+    p.push(`Repo is going stale - ${dead.daysSinceLastCommit} days since last commit.`);
 
   // General
-  if (!repo.metadata.license) p.push("No license — legally risky to use in production.");
+  if (!repo.metadata.license) p.push("No license - legally risky to use in production.");
 
   return p;
 }
@@ -115,7 +115,7 @@ export function generateSuggestions(
   if (burnout.busFactorRisk)
     s.push("Document architecture and onboard a second maintainer to reduce bus factor.");
   if (burnout.maintainerAbsent)
-    s.push("Main contributor is absent — consider posting a call for co-maintainers.");
+    s.push("Main contributor is absent - consider posting a call for co-maintainers.");
 
   return [...new Set(s)].slice(0, 10);
 }
