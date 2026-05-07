@@ -13,12 +13,12 @@ export async function analyzeDependencyRot(
     return {
       score: 5, totalChecked: 0, current: 0, outdated: 0,
       majorBehind: 0, unknown: 0, rotPercent: 0, deps: [],
-      verdict: "no package.json found — not a Node.js project or file is missing.",
+      verdict: "no package.json found - not a Node.js project or file is missing.",
       hasPackageJson: false,
     };
   }
 
-  // Merge prod + dev deps, skip peer (those are the consumer's problem)
+  // Merge prod + dev deps, skip peer 
   const allDeps: Record<string, string> = {
     ...pkg.dependencies,
     ...pkg.devDependencies,
@@ -35,7 +35,7 @@ export async function analyzeDependencyRot(
     };
   }
 
-  // Check up to 40 deps — enough signal, avoids hammering npm registry
+  // Check up to 40 deps - enough signal, avoids hammering npm registry
   const sample = names.slice(0, 40);
   const results = await Promise.all(sample.map(name => checkDep(name, allDeps[name])));
 
@@ -130,7 +130,7 @@ function computeRotScore(rotPercent: number, majorBehind: number, total: number)
 function buildVerdict(rot: number, major: number, outdated: number, total: number): string {
   if (total === 0) return "no dependencies to check.";
   if (rot === 0)   return "all dependencies are up to date.";
-  if (rot < 20)    return `mostly current — ${outdated + major} of ${total} deps need attention.`;
-  if (rot < 50)    return `moderate rot — ${rot}% of deps are behind, including ${major} major version gap${major !== 1 ? "s" : ""}.`;
-  return `heavy rot — ${rot}% of dependencies are outdated. ${major} are multiple major versions behind.`;
+  if (rot < 20)    return `mostly current - ${outdated + major} of ${total} deps need attention.`;
+  if (rot < 50)    return `moderate rot - ${rot}% of deps are behind, including ${major} major version gap${major !== 1 ? "s" : ""}.`;
+  return `heavy rot - ${rot}% of dependencies are outdated. ${major} are multiple major versions behind.`;
 }
