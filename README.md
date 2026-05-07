@@ -1,6 +1,6 @@
 # gh-inspect
 
-> Analyze any GitHub repository in seconds — health score, README quality, issue insights, dependency rot, contributor burnout detection, and dead repo verdict.
+> Analyze any GitHub repository in seconds - health score, README quality, issue insights, dependency rot, contributor burnout detection, and dead repo verdict.
 
 ![Node.js](https://img.shields.io/badge/Node.js-≥20-brightgreen) ![TypeScript](https://img.shields.io/badge/TypeScript-5.x-blue) ![License](https://img.shields.io/badge/license-MIT-yellow)
 
@@ -8,7 +8,7 @@
 
 ## Why
 
-When doing open source contributions, I kept running into the same problem — spending time setting up a repo only to realize mid-way that it was unmaintained, had rotting dependencies, or had a single maintainer who hadn't been active in months.
+When doing open source contributions, I kept running into the same problem , spending time setting up a repo only to realize mid-way that it was unmaintained, had rotting dependencies, or had a single maintainer who hadn't been active in months.
 
 So I built a tool that tells me all of that in one shot before I invest time in a project.
 
@@ -40,7 +40,7 @@ npm install
 
 # 3. Set up environment
 cp .env.example .env
-# Fill in your tokens (see below)
+# Fill in your tokens 
 
 # 4. Build
 npm run build
