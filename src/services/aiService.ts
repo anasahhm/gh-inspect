@@ -1,119 +1,70 @@
 import OpenAI from "openai";
-import type { ReadmeAnalysis, IssueInsights, RepoMetadata } from "../types/index.js";
-
-
-// AI Service
+import type { ReadmeAnalysis, IssueInsights, RepoMetadata, DependencyRotAnalysis, BurnoutAnalysis } from "../types/index.js";
 
 export class AiService {
   private client: OpenAI;
 
   constructor(apiKey: string) {
-  this.client = new OpenAI({
+    this.client = new OpenAI({
   apiKey,
   baseURL: "https://api.groq.com/openai/v1",
 });
   }
 
-  // Core text analysis 
-
-  async analyzeText(prompt: string): Promise<string> {
-    const response = await this.client.chat.completions.create({
-      model: "llama-3.1-8b-instant",
+  async analyzeText(prompt: string, model = "llama-3.1-8b-instant"): Promise<string> {
+    const res = await this.client.chat.completions.create({
+      model,
       messages: [
         {
           role: "system",
           content:
-            "You are an expert open-source maintainer and technical writer. " +
-            "Provide concise, actionable, specific suggestions for improving GitHub repositories. " +
-            "Focus on practical steps that can be taken immediately. " +
-            "Be direct and specific — avoid vague advice.",
+            "You are a senior open-source maintainer. Give specific, actionable repo improvement suggestions. " +
+            "Be direct. No generic advice. Reference the actual data given.",
         },
-        {
-          role: "user",
-          content: prompt,
-        },
+        { role: "user", content: prompt },
       ],
       max_tokens: 500,
       temperature: 0.4,
     });
-
-    return response.choices[0]?.message?.content?.trim() ?? "";
+    return res.choices[0]?.message?.content?.trim() ?? "";
   }
-
-  // Repo-specific suggestions 
 
   async generateRepoSuggestions(
     metadata: RepoMetadata,
     readme: ReadmeAnalysis,
-    issues: IssueInsights
+    issues: IssueInsights,
+    depRot: DependencyRotAnalysis,
+    burnout: BurnoutAnalysis,
   ): Promise<string[]> {
-    const context = buildContext(metadata, readme, issues);
-
     const prompt = `
-Analyze this GitHub repository and provide 3–5 specific, actionable improvement suggestions.
+Repo: ${metadata.fullName} (${metadata.language ?? "unknown language"})
+Stars: ${metadata.stars} | Forks: ${metadata.forks} | License: ${metadata.license ?? "none"}
 
-${context}
+README: ${readme.score}/10, missing: ${readme.missingSections.join(", ") || "none"}
+Issues: ${issues.activityLevel} activity, ${(issues.openRatio * 100).toFixed(0)}% open ratio
+Deps: ${depRot.hasPackageJson ? `${depRot.rotPercent}% outdated, ${depRot.majorBehind} major gaps` : "no package.json"}
+Burnout: top contributor owns ${burnout.topOwnershipPercent}% of commits, absent: ${burnout.maintainerAbsent}
 
-Return ONLY a JSON array of strings (the suggestions), no other text.
-Example format: ["Suggestion one.", "Suggestion two.", "Suggestion three."]
-Each suggestion should be a complete, standalone action item.
-`.trim();
+Give 4 specific improvement suggestions as a JSON array of strings. Nothing else.
+    `.trim();
 
     try {
       const raw = await this.analyzeText(prompt);
       const cleaned = raw.replace(/```json\n?|```\n?/g, "").trim();
       const parsed: unknown = JSON.parse(cleaned);
-
-      if (Array.isArray(parsed) && parsed.every((s) => typeof s === "string")) {
+      if (Array.isArray(parsed) && parsed.every(s => typeof s === "string")) {
         return parsed as string[];
       }
-
       return [raw];
     } catch {
-
-      // If JSON parsing fails, split by newlines and clean up
-
       const raw = await this.analyzeText(
-        `List 3–5 specific improvements for this repository:\n\n${context}\n\nUse a simple numbered list.`
+        `List 4 improvements for ${metadata.fullName}:\n${prompt}\nNumbered list.`
       );
-
       return raw
         .split(/\n/)
-        .map((line) => line.replace(/^\d+[.)]\s*/, "").trim())
-        .filter((line) => line.length > 10)
-        .slice(0, 5);
+        .map(l => l.replace(/^\d+[.)]\s*/, "").trim())
+        .filter(l => l.length > 10)
+        .slice(0, 4);
     }
   }
-}
-
-
-// Context Builder
-
-
-function buildContext(
-  metadata: RepoMetadata,
-  readme: ReadmeAnalysis,
-  issues: IssueInsights
-): string {
-  return `
-Repository: ${metadata.fullName}
-Language: ${metadata.language ?? "Unknown"}
-Stars: ${metadata.stars} | Forks: ${metadata.forks}
-License: ${metadata.license ?? "None"}
-Description: ${metadata.description ?? "None"}
-Topics: ${metadata.topics.join(", ") || "None"}
-
-README Score: ${readme.score}/10
-README Length: ${readme.length} words
-Missing Sections: ${readme.missingSections.join(", ") || "None"}
-Has Code Examples: ${readme.hasCodeExamples}
-Has Badges: ${readme.hasBadges}
-
-Issue Activity: ${issues.activityLevel}
-Open Issues: ${issues.totalOpen} | Closed: ${issues.totalClosed}
-Open Ratio: ${(issues.openRatio * 100).toFixed(1)}%
-Avg Response Time: ${issues.averageResponseTimeHours !== null ? `${issues.averageResponseTimeHours.toFixed(0)} hours` : "N/A"}
-Good First Issue Label: ${issues.hasGoodFirstIssue}
-Help Wanted Label: ${issues.hasHelpWanted}
-`.trim();
 }

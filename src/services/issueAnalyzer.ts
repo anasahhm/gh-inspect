@@ -1,123 +1,57 @@
 import type { GitHubIssue, IssueInsights } from "../types/index.js";
 
-
-// Issue Analyzer
-
-
 export function analyzeIssues(issues: GitHubIssue[]): IssueInsights {
-  const realIssues = issues.filter((i) => !i.isPullRequest);
+  const real    = issues.filter(i => !i.isPullRequest);
+  const open    = real.filter(i => i.state === "open");
+  const closed  = real.filter(i => i.state === "closed");
+  const total   = open.length + closed.length;
+  const openRatio = total > 0 ? open.length / total : 0;
 
-  const openIssues = realIssues.filter((i) => i.state === "open");
-  const closedIssues = realIssues.filter((i) => i.state === "closed");
+  const allLabels = real.flatMap(i => i.labels.map(l => l.toLowerCase()));
+  const hasGoodFirstIssue = allLabels.some(l => l.includes("good first issue") || l.includes("beginner"));
+  const hasHelpWanted     = allLabels.some(l => l.includes("help wanted"));
+  const labelDiversity    = new Set(allLabels).size;
 
-  const totalOpen = openIssues.length;
-  const totalClosed = closedIssues.length;
-  const totalAll = totalOpen + totalClosed;
+  const avgResponse = avgResponseTime(closed);
 
-  const openRatio = totalAll > 0 ? totalOpen / totalAll : 0;
-
-  // Average response time 
-
-  const averageResponseTimeHours = computeAverageResponseTime(closedIssues);
-
-  // Label analysis 
-
-  const allLabels = realIssues.flatMap((i) => i.labels.map((l) => l.toLowerCase()));
-
-  const hasGoodFirstIssue = allLabels.some(
-    (l) =>
-      l.includes("good first issue") ||
-      l.includes("good-first-issue") ||
-      l.includes("beginner") ||
-      l.includes("starter")
-  );
-
-  const hasHelpWanted = allLabels.some(
-    (l) => l.includes("help wanted") || l.includes("help-wanted")
-  );
-
-  const uniqueLabels = new Set(allLabels);
-  const labelDiversity = uniqueLabels.size;
-
-  // Recent activity 
-
-  const thirtyDaysAgo = Date.now() - 30 * 24 * 60 * 60 * 1000;
-  const recentIssues = realIssues.filter(
-    (i) => new Date(i.updatedAt).getTime() > thirtyDaysAgo
-  );
-  const recentActivity = recentIssues.length > 0;
-
-  // Activity level 
-
-  const activityLevel = computeActivityLevel(
-    recentIssues.length,
-    totalAll,
-    openRatio,
-    averageResponseTimeHours
-  );
+  const thirtyDaysAgo  = Date.now() - 30 * 86_400_000;
+  const recentActivity = real.some(i => new Date(i.updatedAt).getTime() > thirtyDaysAgo);
 
   return {
-    totalOpen,
-    totalClosed,
+    totalOpen: open.length,
+    totalClosed: closed.length,
     openRatio,
-    averageResponseTimeHours,
+    averageResponseTimeHours: avgResponse,
     hasGoodFirstIssue,
     hasHelpWanted,
     labelDiversity,
     recentActivity,
-    activityLevel,
+    activityLevel: activityLevel(real.filter(i => new Date(i.updatedAt).getTime() > thirtyDaysAgo).length, total, openRatio, avgResponse),
   };
 }
 
-// Helpers
-
-function computeAverageResponseTime(
-  closedIssues: GitHubIssue[]
-): number | null {
-  const withResponse = closedIssues.filter((i) => i.closedAt !== null);
-
-  if (withResponse.length === 0) return null;
-
-  const totalHours = withResponse.reduce((acc, issue) => {
-    const created = new Date(issue.createdAt).getTime();
-    const closed = new Date(issue.closedAt!).getTime();
-    const diffHours = (closed - created) / (1000 * 60 * 60);
-    return acc + diffHours;
+function avgResponseTime(closed: GitHubIssue[]): number | null {
+  const with_ = closed.filter(i => i.closedAt);
+  if (!with_.length) return null;
+  const totalH = with_.reduce((acc, i) => {
+    return acc + (new Date(i.closedAt!).getTime() - new Date(i.createdAt).getTime()) / 3_600_000;
   }, 0);
-
-  return Math.round((totalHours / withResponse.length) * 10) / 10;
+  return Math.round((totalH / with_.length) * 10) / 10;
 }
 
-function computeActivityLevel(
-  recentCount: number,
-  totalCount: number,
-  openRatio: number,
-  avgResponseHours: number | null
+function activityLevel(
+  recent: number, total: number,
+  openRatio: number, avgH: number | null
 ): IssueInsights["activityLevel"] {
-  if (totalCount === 0) return "inactive";
-
-  let score = 0;
-
-  // Recent activity
-
-  if (recentCount >= 5) score += 3;
-  else if (recentCount >= 2) score += 2;
-  else if (recentCount >= 1) score += 1;
-
-  // Open ratio (lower is better — issues are being resolved)
-
-  if (openRatio < 0.3) score += 2;
-  else if (openRatio < 0.5) score += 1;
-
-  // Response time
-
-  if (avgResponseHours !== null) {
-    if (avgResponseHours < 24) score += 2;
-    else if (avgResponseHours < 168) score += 1;
+  if (total === 0) return "inactive";
+  let s = 0;
+  if (recent >= 5) s += 3; else if (recent >= 2) s += 2; else if (recent >= 1) s += 1;
+  if (openRatio < 0.3) s += 2; else if (openRatio < 0.5) s += 1;
+  if (avgH !== null) {
+    if (avgH < 24) s += 2; else if (avgH < 168) s += 1;
   }
-
-  if (score >= 6) return "high";
-  if (score >= 3) return "moderate";
-  if (score >= 1) return "low";
+  if (s >= 6) return "high";
+  if (s >= 3) return "moderate";
+  if (s >= 1) return "low";
   return "inactive";
 }

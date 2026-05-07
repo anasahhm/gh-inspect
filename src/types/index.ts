@@ -1,3 +1,5 @@
+// GitHub raw data 
+
 export interface RepoMetadata {
   fullName: string;
   description: string | null;
@@ -29,6 +31,20 @@ export interface GitHubIssue {
   isPullRequest: boolean;
 }
 
+export interface GitHubCommit {
+  sha: string;
+  author: string | null;
+  date: string;
+}
+
+export interface PackageJson {
+  name?: string;
+  version?: string;
+  dependencies?: Record<string, string>;
+  devDependencies?: Record<string, string>;
+  peerDependencies?: Record<string, string>;
+}
+
 export interface RepoData {
   metadata: RepoMetadata;
   readme: string | null;
@@ -36,7 +52,11 @@ export interface RepoData {
   contributorsCount: number;
   owner: string;
   repo: string;
+  commits: GitHubCommit[];
+  packageJson: PackageJson | null;
 }
+
+// Analysis results 
 
 export interface ReadmeSection {
   name: string;
@@ -67,22 +87,92 @@ export interface IssueInsights {
   activityLevel: "high" | "moderate" | "low" | "inactive";
 }
 
+// Dependency rot 
+
+export type DepStatus = "current" | "outdated" | "majorBehind" | "unknown";
+
+export interface DepResult {
+  name: string;
+  declared: string;
+  latest: string | null;
+  current: string | null;
+  status: DepStatus;
+  majorsBehind: number;
+}
+
+export interface DependencyRotAnalysis {
+  score: number;
+  totalChecked: number;
+  current: number;
+  outdated: number;
+  majorBehind: number;
+  unknown: number;
+  rotPercent: number;
+  deps: DepResult[];
+  verdict: string;
+  hasPackageJson: boolean;
+}
+
+// Contributor burnout 
+
+export interface ContributorStat {
+  login: string;
+  commits: number;
+  sharePercent: number;
+  lastCommitDate: string;
+  daysSinceLastCommit: number;
+  isAbsent: boolean;
+}
+
+export interface BurnoutAnalysis {
+  score: number;
+  totalCommitsAnalyzed: number;
+  topContributors: ContributorStat[];
+  busFactorRisk: boolean;
+  topOwnershipPercent: number;
+  maintainerAbsent: boolean;
+  abandonRisk: boolean;
+  verdict: string;
+}
+
+// Dead repo detector 
+
+export type DeadVerdict = "active" | "slowing" | "stale" | "abandoned" | "dead";
+
+export interface DeadRepoSignal {
+  name: string;
+  triggered: boolean;
+  detail: string;
+}
+
+export interface DeadRepoAnalysis {
+  verdict: DeadVerdict;
+  score: number;
+  signals: DeadRepoSignal[];
+  daysSinceLastCommit: number;
+  daysSinceLastIssueActivity: number;
+  openPrCount: number;
+  summary: string;
+}
+
+// Scoring 
+
 export interface ScoreBreakdown {
   readme: number;
   issueHealth: number;
   recentActivity: number;
   community: number;
   documentation: number;
+  dependencyRot: number;
+  burnout: number;
 }
 
 export interface RepoScore {
   total: number;
-  readmeScore: number;
-  issueHealthScore: number;
-  activityScore: number;
-  communityScore: number;
   breakdown: ScoreBreakdown;
 }
+
+// Final result 
 
 export interface InspectResult {
   repoScore: RepoScore;
@@ -90,6 +180,9 @@ export interface InspectResult {
   suggestions: string[];
   readmeAnalysis: ReadmeAnalysis;
   issueInsights: IssueInsights;
+  dependencyRot: DependencyRotAnalysis;
+  burnout: BurnoutAnalysis;
+  deadRepo: DeadRepoAnalysis;
   aiSuggestions: string[];
   metadata: RepoMetadata;
 }

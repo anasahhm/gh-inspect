@@ -1,5 +1,10 @@
 import axios, { AxiosInstance, AxiosError } from "axios";
-import type { RepoData, RepoMetadata, GitHubIssue, ParsedGitHubUrl } from "../types/index.js";
+import type {
+  RepoData, RepoMetadata, GitHubIssue,
+  GitHubCommit, PackageJson, ParsedGitHubUrl,
+} from "../types/index.js";
+
+// Raw GitHub shapes 
 
 interface GHRepo {
   full_name: string; description: string | null; stargazers_count: number;
@@ -15,8 +20,15 @@ interface GHIssue {
   labels: { name: string }[]; comments: number; pull_request?: object;
 }
 
-interface GHReadme {
-  content: string; encoding: string;
+interface GHCommit {
+  sha: string;
+  commit: { author: { name: string; date: string } | null };
+  author: { login: string } | null;
+}
+
+interface GHContent {
+  content: string;
+  encoding: string;
 }
 
 // URL parser 
@@ -32,7 +44,7 @@ export function parseGitHubUrl(url: string): ParsedGitHubUrl {
     const m = s.match(p);
     if (m?.[1] && m?.[2]) return { owner: m[1], repo: m[2] };
   }
-  throw new Error(`please enter a valid GitHub URL: "${url}"`);
+  throw new Error(`not a valid GitHub URL: "${url}"`);
 }
 
 // Service 
@@ -54,14 +66,19 @@ export class GitHubService {
   }
 
   async fetchRepoData(owner: string, repo: string): Promise<RepoData> {
-    const [metadata, readme, issues, contributorsCount] = await Promise.all([
-      this.metadata(owner, repo),
-      this.readme(owner, repo),
-      this.issues(owner, repo),
-      this.contributors(owner, repo),
-    ]);
-    return { metadata, readme, issues, contributorsCount, owner, repo };
+    const [metadata, readme, issues, contributorsCount, commits, packageJson] =
+      await Promise.all([
+        this.metadata(owner, repo),
+        this.readme(owner, repo),
+        this.issues(owner, repo),
+        this.contributors(owner, repo),
+        this.commits(owner, repo),
+        this.packageJson(owner, repo),
+      ]);
+    return { metadata, readme, issues, contributorsCount, owner, repo, commits, packageJson };
   }
+
+  // individual fetchers 
 
   private async metadata(owner: string, repo: string): Promise<RepoMetadata> {
     try {
@@ -75,18 +92,18 @@ export class GitHubService {
         updatedAt: d.updated_at, pushedAt: d.pushed_at,
         topics: d.topics ?? [], subscribersCount: d.subscribers_count,
       };
-    } catch (e) { this.throw(e, `${owner}/${repo}`); }
+    } catch (e) { this.bail(e, `${owner}/${repo}`); }
   }
 
   private async readme(owner: string, repo: string): Promise<string | null> {
     try {
-      const { data } = await this.http.get<GHReadme>(`/repos/${owner}/${repo}/readme`);
+      const { data } = await this.http.get<GHContent>(`/repos/${owner}/${repo}/readme`);
       return data.encoding === "base64"
         ? Buffer.from(data.content.replace(/\n/g, ""), "base64").toString("utf-8")
         : data.content;
     } catch (e) {
       if (this.is404(e)) return null;
-      this.throw(e, "readme");
+      this.bail(e, "readme");
     }
   }
 
@@ -107,7 +124,7 @@ export class GitHubService {
       return [...open.data.map(map), ...closed.data.map(map)].filter(i => !i.isPullRequest);
     } catch (e) {
       if (this.is404(e)) return [];
-      this.throw(e, "issues");
+      this.bail(e, "issues");
     }
   }
 
@@ -118,21 +135,52 @@ export class GitHubService {
     } catch { return 0; }
   }
 
+  // Fetch last 100 commits — enough for ownership/burnout stats
+  async commits(owner: string, repo: string): Promise<GitHubCommit[]> {
+    try {
+      const { data } = await this.http.get<GHCommit[]>(
+        `/repos/${owner}/${repo}/commits?per_page=100`
+      );
+      return data.map(c => ({
+        sha: c.sha,
+        author: c.author?.login ?? c.commit.author?.name ?? null,
+        date: c.commit.author?.date ?? "",
+      }));
+    } catch (e) {
+      if (this.is404(e)) return [];
+      return [];
+    }
+  }
+
+  // Fetch package.json if it exists (Node/JS repos)
+  async packageJson(owner: string, repo: string): Promise<PackageJson | null> {
+    try {
+      const { data } = await this.http.get<GHContent>(
+        `/repos/${owner}/${repo}/contents/package.json`
+      );
+      const raw = data.encoding === "base64"
+        ? Buffer.from(data.content.replace(/\n/g, ""), "base64").toString("utf-8")
+        : data.content;
+      return JSON.parse(raw) as PackageJson;
+    } catch { return null; }
+  }
+
+  // error handling 
   private is404(e: unknown) {
     return e instanceof AxiosError && e.response?.status === 404;
   }
 
-  private throw(e: unknown, ctx: string): never {
+  private bail(e: unknown, ctx: string): never {
     if (e instanceof AxiosError) {
       const s = e.response?.status;
       if (s === 401) throw new Error("GitHub token invalid or missing.");
       if (s === 403) {
         if (e.response?.headers["x-ratelimit-remaining"] === "0")
-          throw new Error("GitHub rate limit hit. Try again later.");
+          throw new Error("GitHub rate limit hit — try again later.");
         throw new Error(`Access forbidden (${ctx}).`);
       }
-      if (s === 404) throw new Error("Repository not found — please check the URL.");
-      throw new Error(`GitHub API error ${s ?? "?"} on ${ctx}: ${e.message}`);
+      if (s === 404) throw new Error("Repo not found — check the URL.");
+      throw new Error(`GitHub API ${s ?? "?"} on ${ctx}: ${e.message}`);
     }
     throw new Error(`Unexpected error (${ctx}): ${String(e)}`);
   }

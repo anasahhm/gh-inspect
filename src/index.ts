@@ -1,110 +1,86 @@
 import "dotenv/config";
 import { GitHubService, parseGitHubUrl } from "./services/githubService.js";
-import { analyzeReadme } from "./services/readmeAnalyzer.js";
-import { analyzeIssues } from "./services/issueAnalyzer.js";
-import { assembleResult } from "./services/scoringService.js";
-import { AiService } from "./services/aiService.js";
-import { formatResult } from "./utils/formatter.js";
-import { logger } from "./utils/logger.js";
-import type { AppConfig, InspectResult } from "./types/index.js";
+import { analyzeReadme }                  from "./services/readmeAnalyzer.js";
+import { analyzeIssues }                  from "./services/issueAnalyzer.js";
+import { analyzeDependencyRot }           from "./services/dependencyRotAnalyzer.js";
+import { analyzeBurnout }                 from "./services/burnoutAnalyzer.js";
+import { analyzeDeadRepo }                from "./services/deadRepoAnalyzer.js";
+import { assembleResult }                 from "./services/scoringService.js";
+import { AiService }                      from "./services/aiService.js";
+import { formatResult }                   from "./utils/formatter.js";
+import { logger }                         from "./utils/logger.js";
+import type { AppConfig, InspectResult }  from "./types/index.js";
 import ora from "ora";
 
+export async function inspectRepo(url: string, config: AppConfig): Promise<InspectResult> {
+  const { owner, repo } = parseGitHubUrl(url);
 
-// Main Inspect Function
-
-
-export async function inspectRepo(
-  repoUrl: string,
-  config: AppConfig
-): Promise<InspectResult> {
-
-  // Parse URL
-
-  const { owner, repo } = parseGitHubUrl(repoUrl);
-
-  // Fetch GitHub data
-
-  const githubSpinner = ora({
-    text: `Fetching repository data for ${owner}/${repo}…`,
-    color: "gray",
-  }).start();
-
+  // Fetch all GitHub data 
+  const spin1 = ora({ text: `fetching ${owner}/${repo}…`, color: "cyan" }).start();
   let repoData;
   try {
-    const githubService = new GitHubService(config.githubToken);
-    repoData = await githubService.fetchRepoData(owner, repo);
-    githubSpinner.succeed(`Repository data fetched — ${repoData.issues.length} issues found.`);
-  } catch (err) {
-    githubSpinner.fail("Failed to fetch repository data.");
-    throw err;
+    repoData = await new GitHubService(config.githubToken).fetchRepoData(owner, repo);
+    spin1.succeed(`fetched — ${repoData.issues.length} issues, ${repoData.commits.length} commits`);
+  } catch (e) {
+    spin1.fail("fetch failed");
+    throw e;
   }
 
-  // Analyze README
+  // Run all analyzers in parallel 
+  const spin2 = ora({ text: "analyzing…", color: "yellow" }).start();
 
-  const readmeSpinner = ora({ text: "Analyzing README…", color: "yellow" }).start();
-  const readmeAnalysis = analyzeReadme(repoData.readme);
-  readmeSpinner.succeed(`README analyzed — score: ${readmeAnalysis.score}/10`);
+  const [readmeAnalysis, issueInsights, dependencyRot, burnout] = await Promise.all([
+    Promise.resolve(analyzeReadme(repoData.readme)),
+    Promise.resolve(analyzeIssues(repoData.issues)),
+    analyzeDependencyRot(repoData.packageJson),   // async — hits npm registry
+    Promise.resolve(analyzeBurnout(repoData.commits)),
+  ]);
 
-  // 4. Analyze Issues
+  const deadRepo = analyzeDeadRepo(repoData.commits, repoData.issues, repoData.metadata);
 
-  const issueSpinner = ora({ text: "Analyzing issues…", color: "magenta" }).start();
-  const issueInsights = analyzeIssues(repoData.issues);
-  issueSpinner.succeed(`Issues analyzed — activity: ${issueInsights.activityLevel}`);
+  spin2.succeed(
+    `analyzed — readme ${readmeAnalysis.score}/10  ·  ` +
+    `deps ${dependencyRot.hasPackageJson ? dependencyRot.rotPercent + "% rot" : "no pkg.json"}  ·  ` +
+    `vitality: ${deadRepo.verdict}`
+  );
 
   // AI suggestions (optional)
-
   let aiSuggestions: string[] = [];
 
-  if (config.useAi && config.openaiApiKey) {
-    const aiSpinner = ora({
-      text: "Generating AI-powered recommendations…",
-      color: "blue",
-    }).start();
-
+  if (config.useAi) {
+    const spin3 = ora({ text: "asking AI…", color: "magenta" }).start();
     try {
-      const aiService = new AiService(config.openaiApiKey);
-      aiSuggestions = await aiService.generateRepoSuggestions(
-        repoData.metadata,
-        readmeAnalysis,
-        issueInsights
+      aiSuggestions = await new AiService(config.openaiApiKey).generateRepoSuggestions(
+        repoData.metadata, readmeAnalysis, issueInsights, dependencyRot, burnout
       );
-      aiSpinner.succeed(`${aiSuggestions.length} AI recommendations generated.`);
-    } catch (err) {
-      aiSpinner.warn("AI suggestions unavailable — continuing without them.");
-      logger.debug(`AI error: ${String(err)}`);
+      spin3.succeed(`${aiSuggestions.length} AI suggestions`);
+    } catch (e) {
+      spin3.warn("AI unavailable — continuing without it");
+      logger.debug(String(e));
     }
   }
 
-  // Assemble result
+  // Assemble + print 
+  const result = assembleResult(
+    repoData, readmeAnalysis, issueInsights,
+    dependencyRot, burnout, deadRepo, aiSuggestions
+  );
 
-  const result = assembleResult(repoData, readmeAnalysis, issueInsights, aiSuggestions);
-
-  // Print output
-  
-  formatResult(result, repoUrl);
-
+  formatResult(result, url);
   return result;
 }
 
-// Config loader
-
-
-export function loadConfig(options: {
-  token?: string;
-  openaiKey?: string;
-  noAi?: boolean;
-}): AppConfig {
-  const githubToken = options.token ?? process.env["GITHUB_TOKEN"] ?? "";
-  const openaiApiKey = options.openaiKey ?? process.env["OPENAI_API_KEY"] ?? "";
+export function loadConfig(opts: { token?: string; openaiKey?: string; noAi?: boolean }): AppConfig {
+  const githubToken  = opts.token     ?? process.env["GITHUB_TOKEN"]    ?? "";
+  const openaiApiKey = opts.openaiKey ?? process.env["OPENAI_API_KEY"]  ?? "";
 
   if (!githubToken) {
-    throw new Error(
-      "GitHub token is required.\n" +
-        "Set GITHUB_TOKEN in your .env file or pass --token <token>."
-    );
+    throw new Error("GITHUB_TOKEN is required.\nSet it in .env or pass --token <token>.");
   }
 
-  const useAi = !options.noAi && openaiApiKey.length > 0;
-
-  return { githubToken, openaiApiKey, useAi };
+  return {
+    githubToken,
+    openaiApiKey,
+    useAi: !opts.noAi && openaiApiKey.length > 0,
+  };
 }

@@ -1,284 +1,191 @@
 import type {
-  RepoData,
-  ReadmeAnalysis,
-  IssueInsights,
-  RepoScore,
-  ScoreBreakdown,
-  InspectResult,
+  RepoData, ReadmeAnalysis, IssueInsights,
+  DependencyRotAnalysis, BurnoutAnalysis, DeadRepoAnalysis,
+  RepoScore, ScoreBreakdown, InspectResult,
 } from "../types/index.js";
 
-
-// Scoring Service
+// Final score 
 
 export function computeScore(
-  repoData: RepoData,
-  readmeAnalysis: ReadmeAnalysis,
-  issueInsights: IssueInsights
+  repo: RepoData,
+  readme: ReadmeAnalysis,
+  issues: IssueInsights,
+  depRot: DependencyRotAnalysis,
+  burnout: BurnoutAnalysis,
 ): RepoScore {
-  const readmeScore = computeReadmeScore(readmeAnalysis);
-  const issueHealthScore = computeIssueHealthScore(issueInsights);
-  const activityScore = computeActivityScore(repoData);
-  const communityScore = computeCommunityScore(repoData, issueInsights);
-  const documentationScore = computeDocumentationScore(repoData, readmeAnalysis);
-
   const breakdown: ScoreBreakdown = {
-    readme: readmeScore,
-    issueHealth: issueHealthScore,
-    recentActivity: activityScore,
-    community: communityScore,
-    documentation: documentationScore,
+    readme:        readme.score,
+    issueHealth:   issueHealthScore(issues),
+    recentActivity: activityScore(repo),
+    community:     communityScore(repo, issues),
+    documentation: Math.min(10, readme.score * 0.7 + (repo.metadata.hasWiki ? 1 : 0)),
+    dependencyRot: depRot.hasPackageJson ? depRot.score : 5, // neutral if no pkg.json
+    burnout:       burnout.score,
   };
 
-  // Weighted average
+  // Weights — new features carry real weight
   const total =
-    readmeScore * 0.3 +
-    issueHealthScore * 0.25 +
-    activityScore * 0.2 +
-    communityScore * 0.15 +
-    documentationScore * 0.1;
+    breakdown.readme        * 0.22 +
+    breakdown.issueHealth   * 0.18 +
+    breakdown.recentActivity * 0.15 +
+    breakdown.community     * 0.12 +
+    breakdown.documentation * 0.08 +
+    breakdown.dependencyRot * 0.13 +
+    breakdown.burnout       * 0.12;
 
-  return {
-    total: Math.min(10, Math.round(total * 10) / 10),
-    readmeScore,
-    issueHealthScore,
-    activityScore,
-    communityScore,
-    breakdown,
-  };
+  return { total: Math.min(10, Math.round(total * 10) / 10), breakdown };
 }
 
-
-// Problems & Suggestions Generators
-
+// Problems
 
 export function generateProblems(
-  repoData: RepoData,
-  readmeAnalysis: ReadmeAnalysis,
-  issueInsights: IssueInsights
+  repo: RepoData,
+  readme: ReadmeAnalysis,
+  issues: IssueInsights,
+  depRot: DependencyRotAnalysis,
+  burnout: BurnoutAnalysis,
+  dead: DeadRepoAnalysis,
 ): string[] {
-  const problems: string[] = [];
+  const p: string[] = [];
 
-  // README problems
+  // README
+  if (readme.score === 0)      p.push("No README found.");
+  else if (readme.score < 4)   p.push("README is too thin — barely documents the project.");
+  readme.missingSections.forEach(s => p.push(`README missing: ${s}.`));
 
-  if (readmeAnalysis.score === 0) {
-    problems.push("No README file found — repository is essentially undocumented.");
-  } else if (readmeAnalysis.score < 4) {
-    problems.push("README is minimal and lacks critical sections.");
+  // Issues
+  if (issues.openRatio > 0.7 && issues.totalOpen > 5)
+    p.push(`${(issues.openRatio * 100).toFixed(0)}% of issues are open — not being worked on.`);
+  if (issues.averageResponseTimeHours !== null && issues.averageResponseTimeHours > 336)
+    p.push(`Average issue response time is ${(issues.averageResponseTimeHours / 168).toFixed(1)} weeks.`);
+  if (!issues.hasGoodFirstIssue && issues.totalOpen > 0)
+    p.push('No "good first issue" labels — new contributors have no entry point.');
+
+  // Dependency rot
+  if (depRot.hasPackageJson) {
+    if (depRot.majorBehind >= 5)   p.push(`${depRot.majorBehind} deps are multiple major versions behind.`);
+    else if (depRot.rotPercent > 50) p.push(`${depRot.rotPercent}% of dependencies are outdated.`);
   }
 
-  readmeAnalysis.missingSections.forEach((section) => {
-    problems.push(`README is missing a "${section}" section.`);
-  });
+  // Burnout
+  if (burnout.abandonRisk)
+    p.push(`Abandon risk: sole maintainer (${burnout.topOwnershipPercent}% of commits) has gone quiet.`);
+  else if (burnout.busFactorRisk)
+    p.push(`Bus factor risk: one person owns ${burnout.topOwnershipPercent}% of all commits.`);
 
-  if (!readmeAnalysis.hasCodeExamples && readmeAnalysis.score > 0) {
-    problems.push("README contains no code examples or usage snippets.");
-  }
+  // Dead repo
+  if (dead.verdict === "dead" || dead.verdict === "abandoned")
+    p.push(`Repo appears ${dead.verdict}: ${dead.summary}`);
+  else if (dead.verdict === "stale")
+    p.push(`Repo is going stale — ${dead.daysSinceLastCommit} days since last commit.`);
 
-  // Issue problems
+  // General
+  if (!repo.metadata.license) p.push("No license — legally risky to use in production.");
 
-  if (issueInsights.openRatio > 0.7 && issueInsights.totalOpen > 5) {
-    problems.push(
-      `High open issue ratio (${(issueInsights.openRatio * 100).toFixed(0)}%) — issues are not being resolved.`
-    );
-  }
-
-  if (
-    issueInsights.averageResponseTimeHours !== null &&
-    issueInsights.averageResponseTimeHours > 336 // 2 weeks
-  ) {
-    const weeks = (issueInsights.averageResponseTimeHours / 168).toFixed(1);
-    problems.push(`Slow average issue response time: ~${weeks} weeks.`);
-  }
-
-  if (!issueInsights.hasGoodFirstIssue && issueInsights.totalOpen > 0) {
-    problems.push('No "good first issue" labels — hard for new contributors to get started.');
-  }
-
-  // Activity problems
-
-  const daysSinceActivity = daysSince(repoData.metadata.pushedAt);
-  if (daysSinceActivity > 365) {
-    problems.push(`Repository has not been updated in ${Math.floor(daysSinceActivity / 30)} months — may be abandoned.`);
-  } else if (daysSinceActivity > 180) {
-    problems.push(`Repository has low activity — last push was ${Math.floor(daysSinceActivity / 30)} months ago.`);
-  }
-
-  // Community problems
-
-  if (!repoData.metadata.license) {
-    problems.push("No open-source license specified — restricts adoption and contribution.");
-  }
-
-  if (issueInsights.activityLevel === "inactive") {
-    problems.push("Issue tracker shows no recent activity.");
-  }
-
-  return problems;
+  return p;
 }
+
+// Suggestions 
 
 export function generateSuggestions(
-  repoData: RepoData,
-  readmeAnalysis: ReadmeAnalysis,
-  issueInsights: IssueInsights
+  repo: RepoData,
+  readme: ReadmeAnalysis,
+  issues: IssueInsights,
+  depRot: DependencyRotAnalysis,
+  burnout: BurnoutAnalysis,
 ): string[] {
-  const suggestions: string[] = [];
+  const s: string[] = [];
 
-  // README suggestions
+  readme.improvements.forEach(i => s.push(i));
 
-  readmeAnalysis.improvements.forEach((imp) => suggestions.push(imp));
+  if (!issues.hasGoodFirstIssue)
+    s.push('Tag some approachable issues as "good first issue".');
+  if (!issues.hasHelpWanted)
+    s.push('Add "help wanted" labels to issues needing community help.');
+  if (!repo.metadata.license)
+    s.push("Pick an open-source license (MIT is the easiest starting point).");
+  if (repo.metadata.topics.length === 0)
+    s.push("Add GitHub topics to improve discoverability.");
 
-  // Issue suggestions
+  if (depRot.hasPackageJson && depRot.majorBehind > 0)
+    s.push(`Run \`npm outdated\` and update the ${depRot.majorBehind} major-version gaps.`);
+  if (depRot.hasPackageJson && depRot.rotPercent > 30)
+    s.push("Consider using Renovate or Dependabot to automate dependency updates.");
 
-  if (!issueInsights.hasGoodFirstIssue) {
-    suggestions.push('Label beginner-friendly issues with "good first issue" to attract new contributors.');
-  }
+  if (burnout.busFactorRisk)
+    s.push("Document architecture and onboard a second maintainer to reduce bus factor.");
+  if (burnout.maintainerAbsent)
+    s.push("Main contributor is absent — consider posting a call for co-maintainers.");
 
-  if (!issueInsights.hasHelpWanted) {
-    suggestions.push('Use "help wanted" labels to signal which issues need community assistance.');
-  }
-
-  if (issueInsights.labelDiversity < 3) {
-    suggestions.push("Add diverse issue labels (bug, enhancement, documentation) to improve triage.");
-  }
-
-  // Community suggestions
-
-  if (!repoData.metadata.license) {
-    suggestions.push("Add an open-source license (e.g., MIT, Apache 2.0) to clarify usage rights.");
-  }
-
-  if (repoData.contributorsCount <= 1) {
-    suggestions.push("Add a CONTRIBUTING.md with clear guidelines to encourage community contributions.");
-  }
-
-  if (repoData.metadata.topics.length === 0) {
-    suggestions.push("Add GitHub topics to improve discoverability of the repository.");
-  }
-
-  if (!repoData.metadata.description) {
-    suggestions.push("Add a repository description on GitHub for immediate clarity.");
-  }
-
-  // Remove suggestions already covered in problems to avoid duplication
-
-  return [...new Set(suggestions)].slice(0, 8);
+  return [...new Set(s)].slice(0, 10);
 }
 
-
-// Score Components
-
-
-function computeReadmeScore(readme: ReadmeAnalysis): number {
-  return readme.score;
-}
-
-function computeIssueHealthScore(insights: IssueInsights): number {
-  let score = 10;
-
-  // High open ratio
-
-  if (insights.openRatio > 0.8) score -= 4;
-  else if (insights.openRatio > 0.6) score -= 2;
-  else if (insights.openRatio > 0.4) score -= 1;
-
-  // Penalize slow response
-  if (insights.averageResponseTimeHours !== null) {
-    if (insights.averageResponseTimeHours > 720) score -= 3; // 30 days
-    else if (insights.averageResponseTimeHours > 168) score -= 1.5; // 1 week
-    else if (insights.averageResponseTimeHours > 72) score -= 0.5; // 3 days
-  }
-
-  // Bonus for contributor-friendly labels
-
-  if (insights.hasGoodFirstIssue) score = Math.min(10, score + 0.5);
-  if (insights.hasHelpWanted) score = Math.min(10, score + 0.5);
-
-  return Math.max(0, Math.min(10, Math.round(score * 10) / 10));
-}
-
-function computeActivityScore(repoData: RepoData): number {
-  const daysSincePush = daysSince(repoData.metadata.pushedAt);
-  const daysSinceUpdate = daysSince(repoData.metadata.updatedAt);
-
-  let score = 10;
-
-  if (daysSincePush > 365) score -= 5;
-  else if (daysSincePush > 180) score -= 3;
-  else if (daysSincePush > 90) score -= 1.5;
-  else if (daysSincePush > 30) score -= 0.5;
-
-  if (daysSinceUpdate > 60) score -= 1;
-
-
-  // Stars/forks as signal of active interest
-
-  if (repoData.metadata.stars > 100) score = Math.min(10, score + 0.5);
-  if (repoData.metadata.forks > 20) score = Math.min(10, score + 0.5);
-
-  return Math.max(0, Math.min(10, Math.round(score * 10) / 10));
-}
-
-function computeCommunityScore(
-  repoData: RepoData,
-  insights: IssueInsights
-): number {
-  let score = 0;
-
-  if (repoData.metadata.license) score += 2;
-  if (repoData.contributorsCount > 1) score += 2;
-  if (repoData.contributorsCount > 5) score += 1;
-  if (insights.hasGoodFirstIssue) score += 1;
-  if (insights.hasHelpWanted) score += 1;
-  if (repoData.metadata.topics.length > 0) score += 1;
-  if (repoData.metadata.hasWiki) score += 0.5;
-  if (repoData.metadata.hasDiscussions) score += 0.5;
-  if (repoData.metadata.description) score += 1;
-
-  return Math.min(10, Math.round(score * 10) / 10);
-}
-
-function computeDocumentationScore(
-  repoData: RepoData,
-  readme: ReadmeAnalysis
-): number {
-  let score = readme.score * 0.7;
-
-  if (repoData.metadata.hasWiki) score += 1;
-  if (repoData.metadata.topics.length >= 3) score += 0.5;
-
-  return Math.min(10, Math.round(score * 10) / 10);
-}
-
-
-// Result Assembler
-
+// Assembler 
 
 export function assembleResult(
-  repoData: RepoData,
-  readmeAnalysis: ReadmeAnalysis,
-  issueInsights: IssueInsights,
-  aiSuggestions: string[]
+  repo: RepoData,
+  readme: ReadmeAnalysis,
+  issues: IssueInsights,
+  depRot: DependencyRotAnalysis,
+  burnout: BurnoutAnalysis,
+  dead: DeadRepoAnalysis,
+  aiSuggestions: string[],
 ): InspectResult {
-  const repoScore = computeScore(repoData, readmeAnalysis, issueInsights);
-  const problems = generateProblems(repoData, readmeAnalysis, issueInsights);
-  const suggestions = generateSuggestions(repoData, readmeAnalysis, issueInsights);
+  const repoScore  = computeScore(repo, readme, issues, depRot, burnout);
+  const problems   = generateProblems(repo, readme, issues, depRot, burnout, dead);
+  const suggestions = generateSuggestions(repo, readme, issues, depRot, burnout);
 
   return {
-    repoScore,
-    problems,
-    suggestions,
-    readmeAnalysis,
-    issueInsights,
+    repoScore, problems, suggestions,
+    readmeAnalysis: readme,
+    issueInsights: issues,
+    dependencyRot: depRot,
+    burnout,
+    deadRepo: dead,
     aiSuggestions,
-    metadata: repoData.metadata,
+    metadata: repo.metadata,
   };
 }
 
+// Sub-scores 
 
-// Utility
+function issueHealthScore(i: IssueInsights): number {
+  let s = 10;
+  if (i.openRatio > 0.8)      s -= 4;
+  else if (i.openRatio > 0.6) s -= 2;
+  else if (i.openRatio > 0.4) s -= 1;
+  if (i.averageResponseTimeHours !== null) {
+    if (i.averageResponseTimeHours > 720)      s -= 3;
+    else if (i.averageResponseTimeHours > 168) s -= 1.5;
+    else if (i.averageResponseTimeHours > 72)  s -= 0.5;
+  }
+  if (i.hasGoodFirstIssue) s = Math.min(10, s + 0.5);
+  if (i.hasHelpWanted)     s = Math.min(10, s + 0.5);
+  return Math.max(0, Math.round(s * 10) / 10);
+}
 
+function activityScore(r: RepoData): number {
+  const days = (Date.now() - new Date(r.metadata.pushedAt).getTime()) / 86_400_000;
+  let s = 10;
+  if (days > 365)      s -= 5;
+  else if (days > 180) s -= 3;
+  else if (days > 90)  s -= 1.5;
+  else if (days > 30)  s -= 0.5;
+  if (r.metadata.stars > 100) s = Math.min(10, s + 0.5);
+  if (r.metadata.forks > 20)  s = Math.min(10, s + 0.5);
+  return Math.max(0, Math.round(s * 10) / 10);
+}
 
-function daysSince(dateStr: string): number {
-  const ms = Date.now() - new Date(dateStr).getTime();
-  return ms / (1000 * 60 * 60 * 24);
+function communityScore(r: RepoData, i: IssueInsights): number {
+  let s = 0;
+  if (r.metadata.license)         s += 2;
+  if (r.contributorsCount > 1)    s += 2;
+  if (r.contributorsCount > 5)    s += 1;
+  if (i.hasGoodFirstIssue)        s += 1;
+  if (i.hasHelpWanted)            s += 1;
+  if (r.metadata.topics.length)   s += 1;
+  if (r.metadata.hasWiki)         s += 0.5;
+  if (r.metadata.hasDiscussions)  s += 0.5;
+  if (r.metadata.description)     s += 1;
+  return Math.min(10, Math.round(s * 10) / 10);
 }

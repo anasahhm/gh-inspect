@@ -5,80 +5,50 @@ import chalk from "chalk";
 import { inspectRepo, loadConfig } from "./index.js";
 import { logger } from "./utils/logger.js";
 
-// CLI Definition
-
 const program = new Command();
 
 program
   .name("gh-inspect")
-  .description(
-    chalk.cyan("Analyze GitHub repositories for health, README quality, and issue insights.")
-  )
-  .version("1.0.0", "-v, --version", "Display the current version")
-  .argument("<url>", "GitHub repository URL (e.g., https://github.com/owner/repo)")
-  .option("-t, --token <token>", "GitHub Personal Access Token (overrides GITHUB_TOKEN env var)")
-  .option("-k, --openai-key <key>", "OpenAI API key (overrides OPENAI_API_KEY env var)")
-  .option("--no-ai", "Disable AI-powered suggestions (faster, no OpenAI needed)")
-  .addHelpText(
-    "after",
-    `
-${chalk.bold("Examples:")}
-  ${chalk.cyan("$ gh-inspect https://github.com/facebook/react")}
-  ${chalk.cyan("$ gh-inspect https://github.com/expressjs/express --no-ai")}
-  ${chalk.cyan('$ gh-inspect https://github.com/user/repo --token ghp_xxx')}
+  .description("GitHub repo analyzer — health score, README, issues, dependency rot, burnout, vitality.")
+  .version("1.0.0", "-v, --version")
+  .argument("<url>", "GitHub repo URL or owner/repo")
+  .option("-t, --token <token>",      "GitHub token (overrides GITHUB_TOKEN)")
+  .option("-k, --openai-key <key>",   "OpenAI key (overrides OPENAI_API_KEY)")
+  .option("--no-ai",                  "skip AI suggestions")
+  .addHelpText("after", `
+${chalk.bold("examples:")}
+  ${chalk.dim("gh-inspect https://github.com/expressjs/express")}
+  ${chalk.dim("gh-inspect facebook/react --no-ai")}
+  ${chalk.dim("gh-inspect vuejs/vue --token ghp_xxx")}
 
-${chalk.bold("Environment Variables:")}
-  ${chalk.yellow("GITHUB_TOKEN")}   GitHub Personal Access Token (required)
-  ${chalk.yellow("OPENAI_API_KEY")} OpenAI API key (optional, enables AI suggestions)
-`
-  )
-  .action(async (url: string, options: { token?: string; openaiKey?: string; noAi?: boolean }) => {
-    printBanner();
+${chalk.bold("env:")}
+  ${chalk.yellow("GITHUB_TOKEN")}    required
+  ${chalk.yellow("OPENAI_API_KEY")}  optional — enables AI suggestions
+                   or use Groq free: set baseURL in aiService.ts
+`)
+  .action(async (url: string, opts: { token?: string; openaiKey?: string; noAi?: boolean }) => {
+    console.log();
+    console.log(chalk.bold("gh-inspect") + chalk.dim(" v1.0.0"));
+    console.log(chalk.dim("─".repeat(30)));
 
     try {
-      
-      validateUrl(url);               // Validate URL early for a better UX
-
-      const config = loadConfig({
-        token: options.token,
-        openaiKey: options.openaiKey,
-        noAi: options.noAi,
-      });
-
-      if (!config.useAi) {
-        logger.warn("AI suggestions disabled (no OPENAI_API_KEY or --no-ai flag).");
+      if (!isGitHubUrl(url)) {
+        throw new Error(`"${url}" doesn't look like a GitHub URL.\n  expected: https://github.com/owner/repo`);
       }
-
+      const config = loadConfig({ token: opts.token, openaiKey: opts.openaiKey, noAi: opts.noAi });
+      if (!config.useAi) logger.warn("AI off — pass OPENAI_API_KEY or use Groq to enable it.");
       logger.blank();
-
       await inspectRepo(url, config);
-    } catch (err) {
+    } catch (e) {
       logger.blank();
-      logger.error(err instanceof Error ? err.message : String(err));
+      logger.error(e instanceof Error ? e.message : String(e));
       logger.blank();
       process.exit(1);
-    }   
+    }
   });
 
 program.parse(process.argv);
 
-
-// Helpers
-
-
-function printBanner(): void {
-  console.log();
-  console.log(chalk.bold.cyan("  gh-inspect") + chalk.dim(" v1.0.0"));
-  console.log(chalk.dim("  GitHub Repository Health Analyzer"));
-  console.log(chalk.gray("  ─".repeat(30)));
-}
-
-function validateUrl(url: string): void {
-  const githubPattern = /^(https?:\/\/github\.com\/[^/]+\/[^/]+|[^/]+\/[^/]+|git@github\.com:[^/]+\/[^/]+)/;
-  if (!githubPattern.test(url.trim())) {
-    throw new Error(
-      `"${url}" does not look like a valid GitHub repository URL.\n` +
-        `  Expected: https://github.com/owner/repo`
-    );
-  }
+function isGitHubUrl(url: string): boolean {
+  return /^(https?:\/\/github\.com\/[^/]+\/[^/]+|[^/]+\/[^/]+|git@github\.com:[^/]+\/[^/]+)/.test(url.trim());
 }
