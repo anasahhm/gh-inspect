@@ -9,7 +9,7 @@ const program = new Command();
 
 program
   .name("gh-inspect")
-  .description("GitHub repo analyzer — health score, README, issues, dependency rot, burnout, vitality.")
+  .description("GitHub repo analyzer - health score, README, issues, dependency rot, burnout, vitality.")
   .version("1.0.0", "-v, --version")
   .argument("<url>", "GitHub repo URL or owner/repo")
   .option("-t, --token <token>",      "GitHub token (overrides GITHUB_TOKEN)")
@@ -23,7 +23,7 @@ ${chalk.bold("examples:")}
 
 ${chalk.bold("env:")}
   ${chalk.yellow("GITHUB_TOKEN")}    required
-  ${chalk.yellow("OPENAI_API_KEY")}  optional — enables AI suggestions
+  ${chalk.yellow("OPENAI_API_KEY")}  optional - enables AI suggestions
                    or use Groq free: set baseURL in aiService.ts
 `)
   .action(async (url: string, opts: { token?: string; openaiKey?: string; noAi?: boolean }) => {
@@ -36,7 +36,7 @@ ${chalk.bold("env:")}
         throw new Error(`"${url}" doesn't look like a GitHub URL.\n  expected: https://github.com/owner/repo`);
       }
       const config = loadConfig({ token: opts.token, openaiKey: opts.openaiKey, noAi: opts.noAi });
-      if (!config.useAi) logger.warn("AI off — pass OPENAI_API_KEY or use Groq to enable it.");
+      if (!config.useAi) logger.warn("AI off - pass OPENAI_API_KEY or use Groq to enable it.");
       logger.blank();
       await inspectRepo(url, config);
     } catch (e) {
