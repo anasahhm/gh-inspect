@@ -125,9 +125,13 @@ src/
 
 ## Example outputs
 
+### Active Repo - Claude Code
+
 <img width="1900" height="973" alt="claude" src="https://github.com/user-attachments/assets/58138561-54d0-4e2b-829b-8d8feaf93f4f" />
 
+<br />
 
+### Slowing Repo - CoffeeScript
 
 <img width="1896" height="975" alt="coffeescript" src="https://github.com/user-attachments/assets/d2463145-a3ef-4fff-9458-7e3ed5bc7e26" />
 
