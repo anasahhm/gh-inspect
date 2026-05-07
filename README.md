@@ -80,10 +80,22 @@ gh-inspect facebook/react
 # Skip AI (no API key needed)
 gh-inspect vuejs/vue --no-ai
 
-# Pass tokens inline
-gh-inspect user/repo --token ghp_xxx --openai-key gsk_xxx
 ```
 
+---
+
+## Score weights
+ 
+| Dimension | Weight |
+|---|---|
+| README quality | 22% |
+| Issue health | 18% |
+| Recent activity | 15% |
+| Dependency rot | 13% |
+| Contributor burnout | 12% |
+| Community | 12% |
+| Documentation | 8% |
+ 
 ---
 
 
@@ -108,6 +120,14 @@ src/
 └── types/
     └── index.ts                all TypeScript interfaces
 ```
+
+---
+
+## Example outputs
+
+<img width="1900" height="973" alt="claude" src="https://github.com/user-attachments/assets/58138561-54d0-4e2b-829b-8d8feaf93f4f" />
+
+<img width="1896" height="975" alt="coffeescript" src="https://github.com/user-attachments/assets/d2463145-a3ef-4fff-9458-7e3ed5bc7e26" />
 
 ---
 
