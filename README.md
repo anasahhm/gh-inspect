@@ -18,7 +18,7 @@ So I built a tool that tells me all of that in one shot before I invest time in 
 
 | Feature | What it does |
 |---|---|
-| **Repo health score** | Weighted 0–10 score across 7 dimensions |
+| **Repo health score** | Weighted 0 - 10 score across 7 dimensions |
 | **README analysis** | Detects missing sections, scores quality, lists improvements |
 | **Issue insights** | Open ratio, avg response time, contributor-friendliness labels |
 | **Dependency rot** | Hits npm registry, finds outdated + majorly-behind packages |
